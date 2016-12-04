@@ -235,6 +235,7 @@ angular.module('myApp.controllers', ['myApp.i18n'])
       $scope.credentials.type = sentCode.type
       $scope.nextPending.type = sentCode.next_type || false
       $scope.nextPending.remaining = sentCode.timeout || false
+      delete $scope.nextPending.progress
 
       nextTimeoutCheck()
 
@@ -248,6 +249,7 @@ angular.module('myApp.controllers', ['myApp.i18n'])
         $scope.nextPending.remaining > 0) {
         return
       }
+      $scope.nextPending.progress = true
       MtpApiManager.invokeApi('auth.resendCode', {
         phone_number: $scope.credentials.phone_full,
         phone_code_hash: $scope.credentials.phone_code_hash
@@ -260,10 +262,7 @@ angular.module('myApp.controllers', ['myApp.i18n'])
         $scope.nextPending.remaining === false) {
         return
       }
-      if (!(--$scope.nextPending.remaining)) {
-        $scope.nextPending.success = false
-        $scope.sendNext()
-      } else {
+      if ((--$scope.nextPending.remaining) > 0) {
         nextTimeout = $timeout(nextTimeoutCheck, 1000)
       }
     }
@@ -283,7 +282,6 @@ angular.module('myApp.controllers', ['myApp.i18n'])
       delete $scope.credentials.phone_unoccupied
       delete $scope.credentials.phone_code_valid
       delete $scope.nextPending.remaining
-      delete $scope.nextPending.success
     }
 
     $scope.$watch('credentials.phone_code', function (newVal) {
@@ -297,6 +295,10 @@ angular.module('myApp.controllers', ['myApp.i18n'])
     })
 
     $scope.logIn = function (forceSignUp) {
+      if ($scope.progress.enabled &&
+          $scope.progress.forceSignUp == forceSignUp) {
+        return
+      }
       var method = 'auth.signIn'
       var params = {
         phone_number: $scope.credentials.phone_full,
@@ -311,6 +313,7 @@ angular.module('myApp.controllers', ['myApp.i18n'])
         })
       }
 
+      $scope.progress.forceSignUp = forceSignUp;
       $scope.progress.enabled = true
       MtpApiManager.invokeApi(method, params, options).then(saveAuth, function (error) {
         $scope.progress.enabled = false
@@ -358,7 +361,9 @@ angular.module('myApp.controllers', ['myApp.i18n'])
     }
 
     $scope.checkPassword = function () {
+      $scope.progress.enabled = true
       return PasswordManager.check($scope.password, $scope.credentials.password, options).then(saveAuth, function (error) {
+        $scope.progress.enabled = false
         switch (error.type) {
           case 'PASSWORD_HASH_INVALID':
             $scope.error = {field: 'password'}
@@ -416,7 +421,13 @@ angular.module('myApp.controllers', ['myApp.i18n'])
           delete $scope.progress.enabled
           delete $scope.credentials.password_needed
           $scope.credentials.phone_unoccupied = true
-        }, function () {
+        }, function (error) {
+          if (error.type &&
+                   error.type.substr(0, 17) == '2FA_CONFIRM_WAIT_') {
+            error.waitTime = error.type.substr(17)
+            error.type = '2FA_CONFIRM_WAIT_TIME'
+          }          
+          
           delete $scope.progress.enabled
         })
       })
@@ -736,9 +747,7 @@ angular.module('myApp.controllers', ['myApp.i18n'])
         )
       })
 
-      $scope.dialogs.sort(function (d1, d2) {
-        return d2.index - d1.index
-      })
+      sortDialogs()
 
       if (newPeer) {
         delete $scope.isEmpty.dialogs
@@ -755,6 +764,12 @@ angular.module('myApp.controllers', ['myApp.i18n'])
           break
         }
       }
+    }
+
+    function sortDialogs() {
+      $scope.dialogs.sort(function (d1, d2) {
+        return d2.index - d1.index
+      })
     }
 
     $scope.$on('dialog_top', function (e, dialog) {
@@ -791,10 +806,7 @@ angular.module('myApp.controllers', ['myApp.i18n'])
           if (draftUpdate.index) {
             curDialog.index = draftUpdate.index
           }
-          if (i > 0 && draftUpdate.draft) {
-            $scope.dialogs.splice(i, 1)
-            $scope.dialogs.unshift(curDialog)
-          }
+          sortDialogs();
           break
         }
       }
@@ -2237,7 +2249,8 @@ angular.module('myApp.controllers', ['myApp.i18n'])
 
     $scope.$on('draft_updated', function (e, draftUpdate) {
       if (draftUpdate.peerID == $scope.curDialog.peerID &&
-          !draftUpdate.local) {
+          !draftUpdate.local &&
+          (!$scope.draftMessage.text || $rootScope.idle.isIDLE)) {
         getDraft()
       }
     })

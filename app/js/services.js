@@ -636,9 +636,9 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       }
       var chat = getChat(id)
       if (chat._ == 'chatForbidden' ||
-        chat._ == 'channelForbidden' ||
-        chat.pFlags.kicked ||
-        chat.pFlags.left) {
+          chat._ == 'channelForbidden' ||
+          chat.pFlags.kicked ||
+          chat.pFlags.left) {
         return false
       }
       if (chat.pFlags.creator) {
@@ -1787,7 +1787,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         windowTemplateUrl: templateUrl('media_modal_layout'),
         controller: 'GameModalController',
         scope: scope,
-        windowClass: 'photo_modal_window'
+        windowClass: 'photo_modal_window mobile_modal'
       })
     }
 
@@ -1808,7 +1808,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       var game = wrapForHistory(gameID)
 
       var fullWidth = $(window).width() - (Config.Mobile ? 0 : 10)
-      var fullHeight = $($window).height() - (Config.Mobile ? 92 : 150)
+      var fullHeight = $($window).height() - (Config.Mobile ? 51 : 150)
 
       if (!Config.Mobile && fullWidth > 800) {
         fullWidth -= 208
@@ -1823,7 +1823,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
       var embedType = 'text/html'
 
-      var embedHtml = '<' + embedTag + ' src="' + encodeEntities(embedUrl) + '" type="' + encodeEntities(embedType) + '" frameborder="0" border="0" webkitallowfullscreen mozallowfullscreen allowfullscreen width="' + full.width + '" height="' + full.height + '" style="width: ' + full.width + 'px; height: ' + full.height + 'px;"></' + embedTag + '>'
+      var embedHtml = '<' + embedTag + ' src="' + encodeEntities(embedUrl) + '" type="' + encodeEntities(embedType) + '" frameborder="0" border="0" webkitallowfullscreen mozallowfullscreen allowfullscreen width="' + full.width + '" height="' + full.height + '" style="width: ' + full.width + 'px; height: ' + full.height + 'px;" sandbox="allow-scripts allow-same-origin"></' + embedTag + '>'
 
       full.html = $sce.trustAs('html', embedHtml)
 
@@ -3307,7 +3307,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         var fwdHeader = message.fwd_from || {}
         if (message.from_id && !AppUsersManager.hasUser(message.from_id, message.pFlags.post) ||
           fwdHeader.from_id && !AppUsersManager.hasUser(fwdHeader.from_id, !!fwdHeader.channel_id) ||
-          fwdHeader.channel_id && !AppChatsManager.hasChat(fwdHeader.channel_id) ||
+          fwdHeader.channel_id && !AppChatsManager.hasChat(fwdHeader.channel_id, true) ||
           toPeerID > 0 && !AppUsersManager.hasUser(toPeerID) ||
           toPeerID < 0 && !AppChatsManager.hasChat(-toPeerID)) {
           console.warn(dT(), 'Not enough data for message update', message)
@@ -4635,7 +4635,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
   })
 
-  .service('DraftsManager', function ($rootScope, qSync, MtpApiManager, ApiUpdatesManager, AppMessagesIDsManager, AppPeersManager, RichTextProcessor, Storage, ServerTimeManager) {
+  .service('DraftsManager', function ($rootScope, qSync, MtpApiManager, ApiUpdatesManager, AppMessagesIDsManager, AppChatsManager, AppPeersManager, RichTextProcessor, Storage, ServerTimeManager) {
     var cachedServerDrafts = {}
 
     $rootScope.$on('apiUpdate', function (e, update) {
@@ -4712,6 +4712,10 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       console.warn(dT(), 'change draft', peerID, draft)
       if (!peerID) {
         console.trace('empty peerID')
+      }
+      if (peerID < 0 &&
+          !AppChatsManager.hasRights(-peerID, 'send')) {
+        draft = false
       }
       if (!draft) {
         draft = {
